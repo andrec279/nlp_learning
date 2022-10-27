@@ -1,0 +1,8 @@
+**/**data**/
+
+.DS_Store
+**/**.python-version
+**/*.pickle
+
+
+hw2/wikitext2-sentencized.json
