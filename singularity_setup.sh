@@ -1,2 +1,3 @@
 #! /bin/bash
-conda activate /ext3/conda/zillow_MMKG
+conda activate /ext3/conda/nlp_learning
+

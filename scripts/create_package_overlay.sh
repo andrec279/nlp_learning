@@ -29,9 +29,9 @@ singularity exec --containall --no-home -B $HOME/.ssh \
     --overlay overlay-base.ext3:ro \
     $IMAGE_DIRECTORY/pytorch_22.08-py3.sif /bin/bash << 'EOF'
 source ~/.bashrc
-conda activate /ext3/conda/nlp_learning 
-conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
-conda install numpy pandas tqdm matplotlib umap-learn
-TMPDIR=/dev/shm 
+conda activate /ext3/conda/nlp_learning
+conda install -y pytest 
+conda install -c conda-forge -y hydra-core omegaconf
+TMPDIR=/dev/shm pip install tqdm
 
 EOF

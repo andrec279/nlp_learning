@@ -1,6 +1,10 @@
+**/scripts/**
+.DS_Store
+*.ext3
+**/*.pt
+
 **/**data**/
 
-.DS_Store
 **/**.python-version
 **/*.pickle
 
