@@ -3,10 +3,10 @@
 *.ext3
 **/*.pt
 
-**/**data**/
+hw1/**data**/
 
 **/**.python-version
 **/*.pickle
-
+**/__pycache__/**
 
 hw2/wikitext2-sentencized.json
