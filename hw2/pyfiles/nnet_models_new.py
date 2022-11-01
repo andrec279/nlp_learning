@@ -210,12 +210,12 @@ class Decoder_SelfAttn(nn.Module):
             self.encoder_attention_module = Attention_Module(self.hidden_size, self.hidden_size);
         
     def forward(self, input, memory, encoder_output = None, xs_len = None, context_vec = None):
-        memory = memory.transpose(0, 1);
-        emb = self.embedding(input)
+        memory = memory.transpose(0, 1); #(1,batch_size,hidden_size) -> (batch_size,1,hidden_size)
+        emb = self.embedding(input) # (batch_size, len(input), hidden_size)
+        
         emb = F.relu(emb)
         
-        
-        emb = emb.transpose(0, 1);
+        emb = emb.transpose(0, 1); # -> (len(input), batch_size, hidden_size)
         return_scores = torch.empty(emb.size(0), emb.size(1), self.output_size).to(input.device)
         
         if context_vec is None and self.encoder_attention:
@@ -459,8 +459,9 @@ class seq2seq(nn.Module):
                                                           encoder_output, 
                                                           xs_len, 
                                                           context_vec)
-
+            
             _max_score, preds = decoder_output.max(2)
+            
             predictions.append(preds)
             decoder_input = preds  # set input to next step
             
@@ -480,5 +481,5 @@ class seq2seq(nn.Module):
         predictions = torch.cat(predictions, 1)
         
         if return_attn:
-            return self.v2t(predictions), attn_wts_list
+            return self.v2t(predictions), attn_wts_list, predictions
         return self.v2t(predictions)
