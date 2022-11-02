@@ -421,6 +421,8 @@ class seq2seq(nn.Module):
         _max_score, predictions = decoder_output.max(2)
         return self.v2t(predictions), loss.item()
 
+    
+
     def eval_step(self, batch, return_attn = False):
         """Generate a response to the input tokens.
         :param batch: parlai.core.torch_agent.Batch, contains tensorized
