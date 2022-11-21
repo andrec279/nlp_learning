@@ -40,6 +40,6 @@ echo "Cloning base packages into overlay"
 singularity exec --containall --no-home --bind $HOME/.ssh \
     --overlay overlay-base.ext3 \
     $IMAGE_DIRECTORY/pytorch_22.08-py3.sif /bin/bash << 'EOF'
-conda create --prefix /ext3/conda/zillow_MMKG --clone base
+conda create --prefix /ext3/conda/nlp_learning --clone base
 conda init bash
 EOF
