@@ -1,7 +1,7 @@
-**/scripts/**
 .DS_Store
-*.ext3
 **/*.pt
+**.ext3
+**/scripts/**
 
 hw1/**data**/
 
