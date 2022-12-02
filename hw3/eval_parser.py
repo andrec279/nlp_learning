@@ -3,7 +3,7 @@ from collections import defaultdict
 from datasets import load_dataset
 
 from src.dependency_parse import DependencyParse
-# from bert_parser import BertParser
+from src.parsers.bert_parser import BertParser
 from src.parsers.spacy_parser import SpacyParser
 from src.metrics import get_metrics
 import numpy as np
@@ -34,6 +34,8 @@ def parse_args():
     arg_parser.add_argument("method", choices=["spacy", "bert"])
     arg_parser.add_argument("--data_subset", type=str, default="en_gum")
     arg_parser.add_argument("--test", action="store_true")
+    arg_parser.add_argument("--lamb", type=str, default="0.25")
+    arg_parser.add_argument("--mst", action="store_true")
     
     # SpaCy parser arguments.
     arg_parser.add_argument("--model_name", type=str, default="en_core_web_sm")
@@ -43,11 +45,12 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+
     if args.method == "spacy":
         parser = SpacyParser(args.model_name)
     elif args.method == "bert":
-        # parser = BertParser()
-        pass
+        model_path = f'bert-parser-{args.lamb}.pt'
+        parser = BertParser(model_path, args.mst)
     else:
         raise ValueError("Unknown parser")
 
