@@ -8,6 +8,11 @@ def get_metrics(predicted: DependencyParse, labeled: DependencyParse) -> dict:
     gold_heads = np.array(labeled.heads)
     gold_deprels = np.array(labeled.deprel)
 
+    # print('gold', gold_heads.tolist())
+    # print('predicted', predicted_heads.tolist())
+    # print('sent uas:', sum(predicted_heads==gold_heads)/len(gold_heads))
+
+
     return {
         "uas": sum(predicted_heads==gold_heads)/len(gold_heads),
         "las": sum((predicted_heads==gold_heads)&(predicted_deprels==gold_deprels))/len(gold_heads),

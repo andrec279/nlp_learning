@@ -72,33 +72,64 @@ class BertParser(Parser):
         return preds
     
     def mst_decode(self, logits, token_mask, tokens):
-        valid_rel_pos = [int(self.idx_to_rel_pos[idx]) for idx in self.idx_to_rel_pos.keys() if int(idx) > 3]
+        '''
+        Due to lower than expected UAS / LAS performance with MST decode, I've explained my steps below in hopes of showing
+        my implementation of MST decoding is correct.
+        '''
+        
+        # initialize dict to get logit positions from relative positions
+        rel_pos_to_idx = self.idx_mappers['rel_pos_to_idx']
+        
+        # initialize directed graph
         G = nx.DiGraph()
-
+        
+        # remove cls and sep tokens from logits
         logits = logits[:,:,1:-1]
-        for i in range(logits.size(-1)):
-            rel_pos_scores = logits[:,:,i].squeeze()
 
-            possible_rel_pos = [pos for pos in valid_rel_pos if 0 <= i + pos < logits.size(-1)]
-            possible_rel_pos_ids = [self.rel_pos_to_idx[str(pos)] for pos in possible_rel_pos]
-            possible_rel_pos_scores = F.log_softmax(rel_pos_scores[torch.LongTensor(possible_rel_pos_ids)], dim=0)
-
-            rel_pos_dict = dict(zip(possible_rel_pos_ids, possible_rel_pos))
-
+        # initialize list of sentence positions and add nodes to G for each position
+        sentence_positions = list(range(logits.size(-1)))
+        for i in sentence_positions:
             G.add_node(i)
-            for j, pos_id in enumerate(rel_pos_dict):
-                G.add_edge(i, i + rel_pos_dict[pos_id], weight=possible_rel_pos_scores[j])
+        
+        # loop over sentence positions and add edges for every other position in the sentence
+        for i in sentence_positions:
+            # Get log probabilities over head positions for the given word
+            rel_pos_scores = F.log_softmax(logits[:,:,i].squeeze(), dim=0)
+
+            # Get relative positions for all other position nodes in the sentence for a given position
+            potential_head_positions = sentence_positions[:i] + sentence_positions[i+1:]
+            potential_rel_positions = [pos-i for pos in potential_head_positions]
+
+            # Convert relative position values to class indices for getting log probability scores
+            rel_pos_idx = [rel_pos_to_idx[str(pos)] if str(pos) in list(rel_pos_to_idx.keys()) else rel_pos_to_idx['unk'] 
+                            for pos in potential_rel_positions]
+
+            # Add an edge for each possible relative position along with log probability weight
+            for j in range(len(rel_pos_idx)):
+                G.add_edge(potential_head_positions[j], i, weight=rel_pos_scores[rel_pos_idx[j]])  
             
         mst = maximum_spanning_arborescence(G)
 
-        heads = torch.IntTensor([999]*len(tokens))
+        # Initialize "heads" with unk class indices - we will fill this up to len(heads_) after removing undesired BERT tokens
+        # (e.g. "##ally") from heads_. Doing this way addresses rare edge cases where len(heads_) < len(tokens) after filtering
+        # out undesired tokens
+        heads = torch.IntTensor([1]*len(tokens))
+
+        # We initialize heads_ with zeros and fill with values from mst.edges later
         heads_ = torch.zeros(len(mst.nodes), dtype=torch.int)
 
+        # For each "edge" tuple, edge[1] is the token idx and edge[0] is the head token idx identified by MST. Thus we fill 
+        # heads_ at position edge[1] with edge[0] + 1, adding 1 to the head token idx to match our token indices with UD.
+        # Note that for the root token, there won't be an edge containing the root token's position in edge[1], since that token
+        # shouldn't have a head, so the position in heads_ corresponding to the root token will be left as 0, which is what we want.
         for edge in mst.edges:
             token_idx = edge[1]
             heads_[token_idx] = edge[0]+1
         
+        # Use token_mask to filter out undesired BERT tokens and truncate to len(tokens)
         heads_ = heads_[token_mask][:len(tokens)]
+
+        # To deal with potential edge cases where heads_ ends up shorter than tokens after mask filtering
         heads[:heads_.size(0)] = heads_
 
         return heads.detach().cpu().tolist()
@@ -110,6 +141,7 @@ class BertParser(Parser):
         If self.mst == True, apply MST decoding. Otherwise use argmax decoding.        
         """
         # TODO: Your code here!
+        
         tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
         token_ids_padded = tokenizer(sentence, return_tensors='pt', padding=False)
         token_mask = self.generate_mask(sentence, tokenizer)
@@ -133,8 +165,9 @@ class BertParser(Parser):
         
         else:
             rel_pos_pred_values = self.mst_decode(rel_pos_logits, token_mask, tokens)
-            data_dict['head'] = [str(i) for i in rel_pos_pred_values]
 
+            # convert all head values to str for proper evaluation
+            data_dict['head'] = [str(i) for i in rel_pos_pred_values]
 
         return DependencyParse.from_huggingface_dict(data_dict)
     

@@ -45,6 +45,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    print(f'lamb {args.lamb}, mst={args.mst}')
 
     if args.method == "spacy":
         parser = SpacyParser(args.model_name)

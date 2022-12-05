@@ -55,8 +55,8 @@ def data_preproc(split: str):
     # TODO: Your code here!
     
     ud_data = load_dataset('universal_dependencies', 'en_gum', split=split)
-    rel_pos_vocab = ['pad', 'bos', 'eos', 'unk']
-    deprel_vocab = ['pad', 'bos', 'eos', 'unk']
+    rel_pos_vocab = ['pad', 'unk']
+    deprel_vocab = ['pad', 'unk']
     
     tokens = []
     pos_labels_df = pd.DataFrame()
@@ -88,9 +88,9 @@ def val_to_idx_padded(vals, mapper, max_seq_len):
     # Takes in list of lists of vals, maps them to their idxs in the vocabulary, and applies padding
     output = []
     
-    pad_idx, bos_idx, eos_idx = (mapper['pad'], mapper['bos'], mapper['eos'])
+    pad_idx = mapper['pad']
     for row in vals:
-        padded_idxs = [bos_idx] + [mapper[val] if val in mapper else mapper['unk'] for val in row] + [eos_idx] + [pad_idx]*(max_seq_len-len(row))
+        padded_idxs = [pad_idx] + [mapper[val] if val in mapper else mapper['unk'] for val in row] + [pad_idx] + [pad_idx]*(max_seq_len-len(row))
         output.append(padded_idxs)
     
     return torch.LongTensor(output)
@@ -114,7 +114,7 @@ def generate_masks(text_list, tokens_tensor):
 
 
 def build_tensor_dataset(split='train'):
-    preproc_data, idx_mappers = data_preproc('train')
+    preproc_data, idx_mappers = data_preproc(split)
     
     return UDDataset(preproc_data), idx_mappers
 
@@ -165,7 +165,8 @@ def finetune_epoch(parser: BertParserModel,
                    batch_size=BATCH_SIZE,
                    lr=1e-4,
                    lamb=0.25,
-                   device=device):
+                   device=device,
+                   pad_idx=0):
   
   parser = parser.to(device)
   parser.train()
@@ -177,7 +178,7 @@ def finetune_epoch(parser: BertParserModel,
           params_to_update.append(param)
 
   optimizer = torch.optim.Adam(params_to_update, lr=lr, eps=1e-08)
-  criterion = nn.CrossEntropyLoss(ignore_index=0).to(device)
+  criterion = nn.CrossEntropyLoss(ignore_index=pad_idx).to(device)
 
   idx = 0
   train_loss_curve = []
@@ -205,7 +206,7 @@ def finetune_epoch(parser: BertParserModel,
   
 
 @torch.no_grad()
-def evaluate(parser: BertParserModel, eval_dataset, batch_collater):
+def evaluate(parser: BertParserModel, eval_dataset, batch_collater, pad_idx=0):
   parser.eval()
   loader = DataLoader(eval_dataset, batch_size=BATCH_SIZE, collate_fn=batch_collater)
   n_rel_pos_correct = 0
@@ -220,11 +221,11 @@ def evaluate(parser: BertParserModel, eval_dataset, batch_collater):
     rel_pos_logits_, deprel_logits_ = parser(token_ids.to(device))
     rel_pos_logits, deprel_logits = align_tokens(rel_pos_logits_, deprel_logits_, rel_pos_ids, deprel_ids, bert_tokens_mask)
   
-    rel_pos_correct = rel_pos_logits.argmax(1) == rel_pos_ids
-    deprel_correct = deprel_logits.argmax(1) == deprel_ids
+    rel_pos_correct = ((rel_pos_logits.argmax(1) == rel_pos_ids)&(rel_pos_ids != pad_idx))
+    deprel_correct = ((deprel_logits.argmax(1) == deprel_ids)&(deprel_ids != pad_idx))
     n_rel_pos_correct += rel_pos_correct.sum().item()
     n_deprel_correct += deprel_correct.sum().item()
-    n_total += rel_pos_correct.numel()
+    n_total += (rel_pos_ids != pad_idx).sum().item()
 
     idx += 1
 
@@ -244,17 +245,12 @@ def finetune(parser: BertParserModel, train_dataset, eval_dataset, batch_collate
   
   print('Final training loss:', losses[-1])
   
-#   plt.plot(np.arange(len(losses)), losses)
-#   plt.ylabel('Training loss')
-#   plt.title(f'Dependency Parser Training Loss Curves @ lambda = {lamb}')
-#   plt.show()
-  
   torch.save(parser.state_dict(), f'bert-parser-{lamb}.pt')
 
 
 if __name__ == '__main__':
     ud_dataset_train, idx_mappers = build_tensor_dataset(split='train')
-    ud_dataset_eval, _ = build_tensor_dataset(split='val')
+    ud_dataset_eval, _ = build_tensor_dataset(split='validation')
 
     model_params = {'n_rel_pos': len(list(idx_mappers['rel_pos_to_idx'].keys())),
                     'n_deprel': len(list(idx_mappers['deprel_to_idx'].keys())),
